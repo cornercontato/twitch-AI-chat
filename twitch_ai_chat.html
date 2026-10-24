@@ -1,0 +1,1602 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Twitch AI Chat Simulator</title>
+<style>
+/* ============================================================
+   BASE / RESET
+============================================================ */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  font-family: Inter, "Segoe UI", Roobert, Helvetica, Arial, sans-serif;
+  background: #18181b;
+  color: #efeff1;
+  overflow: hidden;
+  font-size: 14px;
+}
+button { font-family: inherit; cursor: pointer; }
+input, select { font-family: inherit; }
+
+/* ============================================================
+   LAYOUT
+============================================================ */
+#app {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+}
+#sidebar {
+  width: 300px;
+  min-width: 300px;
+  background: linear-gradient(180deg, #6441a5 0%, #503484 100%);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  transition: margin-left .25s ease;
+  padding: 12px;
+  gap: 10px;
+}
+body.sidebar-collapsed #sidebar {
+  margin-left: -300px;
+}
+#main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: #18181b;
+}
+
+/* ============================================================
+   SIDEBAR CONTENT
+============================================================ */
+.panel {
+  background: rgba(24,24,27,0.55);
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.panel h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #d6c7f5;
+  font-weight: 700;
+}
+.btn {
+  background: #9147ff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background .15s, transform .1s;
+}
+.btn:hover { background: #772ce8; }
+.btn:active { transform: scale(0.98); }
+.btn.secondary { background: #3a3a3d; }
+.btn.secondary:hover { background: #4a4a4e; }
+.btn.on { background: #00b36b; }
+.btn.on:hover { background: #009e5f; }
+.btn.off { background: #3a3a3d; }
+.btn.off:hover { background: #4a4a4e; }
+.btn.danger { background: #b33a3a; }
+.btn.danger:hover { background: #9e2e2e; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+label.field-label {
+  font-size: 11px;
+  color: #d6c7f5;
+  font-weight: 600;
+}
+.txt, select.txt {
+  width: 100%;
+  background: #111111;
+  border: 1px solid #3a3a3d;
+  color: #efeff1;
+  border-radius: 6px;
+  padding: 7px 9px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color .15s;
+}
+.txt:focus { border-color: #9147ff; }
+.row { display: flex; gap: 6px; align-items: center; }
+.row .txt { flex: 1; }
+.small-note { font-size: 11px; color: #cfc3ea; }
+.chk-row { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #e6ddfa; }
+input[type="range"] {
+  width: 100%;
+  accent-color: #9147ff;
+}
+.slider-value { font-size: 12px; color: #efeff1; font-weight: 600; }
+
+/* Status panel */
+#statusPanel {
+  font-size: 11px;
+  color: #adadb8;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px 8px;
+  background: rgba(0,0,0,0.35);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+#statusPanel b { color: #efeff1; font-weight: 600; }
+#statusMsg {
+  grid-column: 1 / -1;
+  color: #ffb3b3;
+  min-height: 14px;
+  word-break: break-word;
+}
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+.dot.green { background: #00e07a; }
+.dot.red { background: #f13c3c; }
+.dot.gray { background: #6b6b70; }
+
+/* Screen preview */
+#previewWrap {
+  display: none;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.15);
+}
+#previewWrap.visible { display: block; }
+#previewVideo { width: 100%; display: block; background: #000; }
+
+/* ============================================================
+   CHAT AREA
+============================================================ */
+#chatHeader {
+  height: 48px;
+  min-height: 48px;
+  background: #1f1f23;
+  border-bottom: 1px solid #2c2c31;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 10px;
+}
+#chatHeader .title {
+  font-weight: 700;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #efeff1;
+  flex: 1;
+  text-align: center;
+}
+#collapseBtn {
+  background: transparent;
+  border: none;
+  color: #adadb8;
+  font-size: 20px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+#collapseBtn:hover { background: #2c2c31; color: #fff; }
+#liveBadge {
+  background: #eb0400;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+}
+
+#chatBox {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 8px 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+#chatBox::-webkit-scrollbar { width: 8px; }
+#chatBox::-webkit-scrollbar-track { background: #18181b; }
+#chatBox::-webkit-scrollbar-thumb { background: #3a3a3d; border-radius: 4px; }
+#chatBox::-webkit-scrollbar-thumb:hover { background: #4a4a4e; }
+#sidebar::-webkit-scrollbar { width: 8px; }
+#sidebar::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.35); border-radius: 4px; }
+
+.chat-message {
+  padding: 4px 6px;
+  border-radius: 4px;
+  line-height: 1.45;
+  word-wrap: break-word;
+  animation: msgIn .18s ease-out;
+  font-size: 13.5px;
+}
+.chat-message:hover { background: #1f1f23; }
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.chat-message .ts {
+  color: #6b6b70;
+  font-size: 11px;
+  margin-right: 5px;
+}
+.chat-message .uname { font-weight: 700; }
+.chat-message .colon { color: #adadb8; }
+.chat-message .msg { color: #efeff1; }
+.chat-message.streamer-msg {
+  background: rgba(145,71,255,0.10);
+  border-left: 3px solid #9147ff;
+}
+.chat-message .badge {
+  background: #eb0400;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-right: 5px;
+  vertical-align: 1px;
+  letter-spacing: .5px;
+}
+.chat-message.system-msg { color: #adadb8; font-style: italic; font-size: 12px; }
+
+#chatInputBar {
+  padding: 10px 12px 14px;
+  background: #18181b;
+  border-top: 1px solid #2c2c31;
+  display: flex;
+  gap: 8px;
+}
+#chatInput {
+  flex: 1;
+  background: #111111;
+  border: 1px solid #3a3a3d;
+  border-radius: 6px;
+  color: #efeff1;
+  padding: 10px 12px;
+  font-size: 13.5px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+#chatInput:focus { border-color: #9147ff; box-shadow: 0 0 0 2px rgba(145,71,255,0.25); }
+#sendBtn {
+  background: #9147ff;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0 18px;
+  font-weight: 700;
+  font-size: 13px;
+  transition: background .15s;
+}
+#sendBtn:hover { background: #772ce8; }
+
+/* ============================================================
+   RESPONSIVE
+============================================================ */
+@media (max-width: 820px) {
+  #sidebar { position: absolute; z-index: 20; height: 100%; box-shadow: 4px 0 18px rgba(0,0,0,.5); }
+  body.sidebar-collapsed #sidebar { margin-left: -310px; }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ================= SIDEBAR ================= -->
+  <aside id="sidebar">
+
+    <!-- API SETTINGS -->
+    <div class="panel">
+      <h3>🔑 API Provider</h3>
+      <label class="field-label" for="providerSel">Provider</label>
+      <select id="providerSel" class="txt">
+        <option value="openrouter" selected>OpenRouter</option>
+        <option value="groq">Groq (free, veloce)</option>
+        <option value="gemini">Google Gemini (free)</option>
+        <option value="aion">Aion Labs (free roleplay)</option>
+        <option value="custom">Custom (OpenAI-compatibile)</option>
+      </select>
+      <input type="text" id="customBaseUrl" class="txt" placeholder="https://tuo-endpoint/v1" style="display:none;" spellcheck="false">
+      <div class="small-note" id="providerNote"></div>
+      <label class="field-label" for="apiKey">API Key</label>
+      <div class="row">
+        <input type="password" id="apiKey" class="txt" placeholder="sk-or-v1-..." autocomplete="off">
+        <button id="toggleKeyBtn" class="btn secondary" title="Mostra/Nascondi" style="padding:7px 10px;">👁</button>
+      </div>
+      <div class="chk-row">
+        <input type="checkbox" id="saveKeyChk">
+        <label for="saveKeyChk">Salva la key permanentemente su questo browser (localStorage)</label>
+      </div>
+      <label class="field-label" for="modelId">Model ID</label>
+      <input type="text" id="modelId" class="txt" value="qwen/qwen3.8-27b:free" spellcheck="false" list="modelsList">
+      <datalist id="modelsList"></datalist>
+      <div class="row">
+        <button id="testApiBtn" class="btn secondary" style="flex:1;">Test API</button>
+        <button id="loadModelsBtn" class="btn secondary" style="flex:1;">Load Models</button>
+      </div>
+    </div>
+
+    <!-- SPAM TYPE -->
+    <div class="panel">
+      <h3>Type of Spam</h3>
+      <select id="spamType" class="txt">
+        <option value="random" selected>Random</option>
+        <option value="laughing">Laughing</option>
+        <option value="hype">Hype</option>
+        <option value="emotes">Emotes</option>
+        <option value="gg">GG</option>
+        <option value="reactions">Reactions</option>
+      </select>
+    </div>
+
+    <!-- CHAT SPEED -->
+    <div class="panel">
+      <h3>Chat Speed</h3>
+      <input type="range" id="speedSlider" min="2" max="60" value="12" step="1">
+      <div class="slider-value" id="speedLabel">~ 12 messages/min</div>
+      <div class="chk-row">
+        <input type="checkbox" id="timestampsChk">
+        <label for="timestampsChk">Mostra timestamp</label>
+      </div>
+    </div>
+
+    <!-- AI ROLEPLAY -->
+    <div class="panel">
+      <h3>🤖 AI Roleplay Chat</h3>
+      <label class="field-label" for="streamerName">Streamer Name:</label>
+      <input type="text" id="streamerName" class="txt" value="Streamer">
+      <label class="field-label" for="scenario">Scenario:</label>
+      <input type="text" id="scenario" class="txt" value="Valorant Ranked">
+      <label class="field-label" for="language">Language:</label>
+      <select id="language" class="txt">
+        <option value="it" selected>Italiano</option>
+        <option value="en">English</option>
+      </select>
+      <label class="field-label" for="chatModeSel">Modalità chat:</label>
+      <select id="chatModeSel" class="txt">
+        <option value="normal">Chat normale</option>
+        <option value="ai">Solo IA</option>
+        <option value="mixed" selected>Mista</option>
+      </select>
+      <div class="small-note">Normale = solo spam locale · Solo IA = solo messaggi del modello · Mista = entrambi</div>
+      <button id="startBtn" class="btn danger">⏸ Stop Chat</button>
+      <button id="clearBtn" class="btn secondary">Clear Chat</button>
+    </div>
+
+    <!-- STREAM VISION -->
+    <div class="panel">
+      <h3>👁 Stream Vision</h3>
+      <button id="selectScreenBtn" class="btn">Select Screen / Window</button>
+      <button id="stopScreenBtn" class="btn danger" disabled>Stop Screen Capture</button>
+      <div class="small-note" id="screenStatus"><span class="dot gray"></span>Screen capture inactive</div>
+      <label class="field-label" for="visionApiKey">OpenRouter API Key (per la Vision)</label>
+      <div class="row">
+        <input type="password" id="visionApiKey" class="txt" placeholder="sk-or-v1-..." autocomplete="off">
+        <button id="toggleVisionKeyBtn" class="btn secondary" title="Mostra/Nascondi" style="padding:7px 10px;">👁</button>
+      </div>
+      <label class="field-label" for="visionModelId">Vision Model ID</label>
+      <input type="text" id="visionModelId" class="txt" value="qwen/qwen3.8-27b:free" spellcheck="false">
+      <button id="visionBtn" class="btn off">Vision: OFF</button>
+      <label class="field-label" for="visionIntervalSlider">Vision interval</label>
+      <input type="range" id="visionIntervalSlider" min="5" max="60" value="30" step="1">
+      <div class="slider-value" id="visionIntervalLabel">30 s</div>
+      <button id="togglePreviewBtn" class="btn secondary" disabled>Show preview</button>
+      <div class="small-note" id="visionInfo"></div>
+      <div id="previewWrap"><video id="previewVideo" muted playsinline></video></div>
+    </div>
+
+    <!-- STATUS -->
+    <div class="panel">
+      <h3>📊 Status</h3>
+      <div id="statusPanel">
+        <span>API: <b id="statusApi">Offline</b></span>
+        <span>AI: <b id="statusAi">OFF</b></span>
+        <span>Vision: <b id="statusVision">OFF</b></span>
+        <span>Screen: <b id="statusScreen">Inactive</b></span>
+        <span>Queue: <b id="statusQueue">0</b></span>
+        <span>Requests: <b id="statusRequests">0</b></span>
+        <span id="statusMsg"></span>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ================= MAIN / CHAT ================= -->
+  <main id="main">
+    <div id="chatHeader">
+      <button id="collapseBtn" title="Mostra/Nascondi sidebar">☰</button>
+      <span class="title">Stream Chat</span>
+      <span id="liveBadge">LIVE</span>
+    </div>
+    <div id="chatBox"></div>
+    <div id="chatInputBar">
+      <input type="text" id="chatInput" placeholder="Send a message" maxlength="500" autocomplete="off">
+      <button id="sendBtn">Chat</button>
+    </div>
+  </main>
+
+</div>
+
+<!-- Hidden elements for screen capture -->
+<video id="hiddenVideo" muted playsinline style="display:none;"></video>
+<canvas id="captureCanvas" style="display:none;"></canvas>
+
+<script>
+"use strict";
+/* ============================================================
+   CONFIG
+============================================================ */
+const PROVIDERS = {
+  openrouter: {
+    name: "OpenRouter",
+    baseUrl: "https://openrouter.ai/api/v1",
+    defaultModel: "qwen/qwen3.8-27b:free",
+    visionModel: "",
+    vision: true,
+    note: "Key su openrouter.ai/settings/keys (abilita 'Free model publication' nella privacy). Limiti: 20 req/min, 50 req/giorno (1000 con $10 caricati una tantum). qwen3.8-27b:free supporta anche le immagini: Vision Model ID può restare vuoto."
+  },
+  groq: {
+    name: "Groq",
+    baseUrl: "https://api.groq.com/openai/v1",
+    defaultModel: "openai/gpt-oss-20b",
+    visionModel: "",
+    vision: true,
+    note: "Free: 30 req/min, ~14.400 req/giorno. Key: console.groq.com/keys. La Vision è gestita a parte nella sezione Stream Vision (OpenRouter)."
+  },
+  gemini: {
+    name: "Google Gemini",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+    defaultModel: "gemini-3.5-flash-lite",
+    visionModel: "",
+    vision: true,
+    note: "Free: ~500 req/giorno sui Flash-Lite. Key: aistudio.google.com/apikey. Vision: sì (stesso modello, lascia vuoto Vision Model)."
+  },
+  aion: {
+    name: "Aion Labs",
+    baseUrl: "https://api.aionlabs.ai/v1",
+    defaultModel: "aion-labs/aion-rp-llama-3.1-8b",
+    visionModel: "",
+    vision: false,
+    note: "Free tier: 15 req/min, 20K token/giorno (≈25 batch!). Key: aionlabs.ai. Vision: NO. Usalo solo come backup."
+  }
+};
+function providerCfg() {
+  if (dom.providerSel.value === "custom") {
+    return {
+      name: "Custom",
+      baseUrl: dom.customBaseUrl.value.trim().replace(/\/+$/, ""),
+      defaultModel: dom.modelId.value.trim(),
+      visionModel: "",
+      vision: true,
+      note: "Endpoint OpenAI-compatibile. DEVE avere CORS abilitato per funzionare dal browser."
+    };
+  }
+  return PROVIDERS[dom.providerSel.value] || PROVIDERS.openrouter;
+}
+function storageKeyName() { return "api_key_" + dom.providerSel.value; }
+// Storage PERMANENTE (localStorage) con fallback silenzioso se bloccato da file://
+function storeSet(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* bloccato */ } }
+function storeGet(k)    { try { return localStorage.getItem(k) || ""; } catch (e) { return ""; } }
+function storeRemove(k) { try { localStorage.removeItem(k); } catch (e) { /* bloccato */ } }
+
+const MAX_CHAT_DOM_MESSAGES = 300;      // limite messaggi nel DOM (anti memory leak)
+const MAX_RECENT_FOR_AI = 16;           // ultimi messaggi inviati all'AI
+const MAX_EVENTS = 8;                   // memoria eventi
+const MIN_AI_REQUEST_GAP = 12000;       // ms minimi tra due batch AI
+const QUEUE_LOW_THRESHOLD = 2;          // sotto questa soglia richiedi nuovo batch
+const BACKOFF_STEPS = [5000, 10000, 20000, 40000]; // 429 exponential backoff
+const FRAME_MAX_WIDTH = 800;            // px larghezza screenshot
+const JPEG_QUALITY = 0.7;
+
+const TWITCH_COLORS = [
+  "#FF4949","#5C9EFF","#4BD37B","#F76BB6","#FF8A3D","#B57BFF",
+  "#3DDAD7","#FFD23D","#7BE86B","#FF6B6B","#6BA6FF","#E86BFF",
+  "#5FE0A8","#FFA34D","#9D8CFF","#63C5EA","#F2E85C","#FF7FA5"
+];
+
+const PERSONALITIES = ["troll","supportive","tryhard","casual","memer","quiet","sarcastic","backseat gamer"];
+
+const NAME_PARTS_A = ["Dark","Pixel","Frag","Luca","Marco","Gio","Fra","Shadow","Neko","Kappa","Toxic","Sleepy","Banana","Coffee","Ghost","Ninja","Turbo","Lil","Big","Ita","xX","Pro","Nova","Skera","Pasta"];
+const NAME_PARTS_B = ["Wolf","FPS","Gamer","Man","_92","07","King","Boy","Lord","Enjoyer","Zx","TV","Playz","Sniper","_ita","Doge","Cat","Beast","Aim","Clutch","Vibes","One","Zero","Storm","Peek"];
+
+const UNIVERSAL_EMOTES = ["🐸","💀","😂","🔥","😭","👏","😱","🤡","❤️","😳","👀","🙏","💯","🥶","😤","🫠","😎","🍿","⚡","🐸🐸"];
+const LAUGH_POOL = ["LOOOL","LMAOOO","HAHAHAHAHA","😂😂😂","ahahahahah","💀💀💀","🤣🤣","xDDD","io morto 💀","HAHAHA no vabbè","😹","ahahah non ce la faccio"];
+const HYPE_POOL = ["LETS GOOO","HYPEEEE 🔥","W","WWW","💪💪","VAMOOOS","clutch incoming","insane","🔥🔥🔥","🚀🚀","👑","⚡⚡"];
+const GG_POOL = ["gg","GG","ggwp","GGs","gg ez","gg wp chat","GG 👏"];
+
+const REACTION_POOL = {
+  it: ["NOOOO","MA COSA","CLIPPALO","clip it","bro??","ma dai","no vabbè","???","assurdo","che sfortuna","era impossibile","MA COME","io non ci credo","che fortuna raga"],
+  en: ["NOOOO","WHAT","CLIP IT","bro??","no way","???","insane","unlucky","that was impossible","HOW","I don't believe it","so lucky lol"]
+};
+
+const PERSONALITY_TEMPLATES = {
+  it: {
+    "troll": ["streamer bronzo confermato","disinstalla va 💀","mio nonno mira meglio","scusa il lag vero? 🤡","peggior stream di oggi e sono felice","uninstall speedrun any%"],
+    "supportive": ["dai che ce la fai ❤️","grande!!","non mollare","sei fortissimo oggi","daje tutta","ti meriti molti più viewer","bel round comunque"],
+    "tryhard": ["dovevi swappare prima","posizionamento sbagliato lì","crosshair troppo basso","era eco round ovvio","angolo sbagliato, si peekava largo","compra sempre armor"],
+    "casual": ["raga che si dice","appena entrato, che è successo?","che rank sei ora?","io tra poco a cena","primo stream che vedo, carino","quanto manca alla fine?"],
+    "memer": ["questa run è cursed 💀","clip it and ship it","no shot 💀","POV: la chat aveva ragione","canon event","letteralmente io alle 8 di lunedì"],
+    "quiet": ["gg","lol","vero","già","eh","F","ok"],
+    "sarcastic": ["che mira signori","tutto calcolato ovviamente","un vero professionista","sicuramente colpa del team","strategia avanzatissima","wow. incredibile. mai visto."],
+    "backseat gamer": ["gira a destra!!","perché non compri lo scudo","dovevi salvare l'arma","GUARDA LA MINIMAPPA","usa la ulti adesso","dovevi aspettare il team"]
+  },
+  en: {
+    "troll": ["bronze streamer confirmed","just uninstall 💀","my grandma aims better","blame the lag right? 🤡","worst stream today and I love it","uninstall speedrun any%"],
+    "supportive": ["you got this ❤️","let's go!!","don't give up","you're playing great today","keep it up","you deserve way more viewers","good round anyway"],
+    "tryhard": ["should've swapped earlier","bad positioning there","crosshair placement too low","obvious eco round","wrong angle, wide peek was free","always buy armor"],
+    "casual": ["hey chat what's up","just got here, what happened?","what rank are you now?","dinner soon for me","first time here, nice stream","how long is the stream today?"],
+    "memer": ["this run is cursed 💀","clip it and ship it","no shot 💀","POV: chat was right","canon event","literally me on monday 8am"],
+    "quiet": ["gg","lol","true","yeah","F","ok"],
+    "sarcastic": ["what an aim ladies and gentlemen","all calculated obviously","a true professional","definitely the team's fault","very advanced strategy","wow. incredible. never seen that."],
+    "backseat gamer": ["go right!!","why no shield buy","should've saved the gun","CHECK THE MINIMAP","use your ult now","should've waited for the team"]
+  }
+};
+
+/* ============================================================
+   STATE
+============================================================ */
+const state = {
+  running: false,
+  visionEnabled: false,
+  visionSupported: true,       // diventa false se il modello rifiuta immagini
+  screenActive: false,
+  mediaStream: null,
+  lastFrameDataUrl: null,
+
+  viewers: [],                 // pool utenti virtuali persistenti
+  recentMessages: [],          // {username, message, isStreamer}
+  lastEvents: [],              // memoria eventi (max MAX_EVENTS)
+  currentScreenState: null,    // ultimo stato sintetico dello schermo
+  streamerRecentMessages: [],  // ultimi messaggi manuali dello streamer
+
+  queue: [],                   // coda messaggi AI da mostrare gradualmente
+  chatTimer: null,
+  visionTimer: null,
+
+  aiBusy: false,
+  visionBusy: false,
+  lastAiRequestAt: 0,
+  requestCount: 0,
+  apiConnected: false,
+  backoffAttempt: 0,
+  backoffUntil: 0,
+  visionBackoffAttempt: 0,
+  visionBackoffUntil: 0,
+
+  msgsPerMin: 12,
+  visionIntervalSec: 30
+};
+
+/* ============================================================
+   DOM
+============================================================ */
+const $ = (id) => document.getElementById(id);
+const dom = {
+  providerSel: $("providerSel"), providerNote: $("providerNote"), customBaseUrl: $("customBaseUrl"),
+  apiKey: $("apiKey"), toggleKeyBtn: $("toggleKeyBtn"), saveKeyChk: $("saveKeyChk"),
+  modelId: $("modelId"), visionModelId: $("visionModelId"), testApiBtn: $("testApiBtn"),
+  visionApiKey: $("visionApiKey"), toggleVisionKeyBtn: $("toggleVisionKeyBtn"),
+  loadModelsBtn: $("loadModelsBtn"), modelsList: $("modelsList"),
+  clearBtn: $("clearBtn"), startBtn: $("startBtn"),
+  spamType: $("spamType"), speedSlider: $("speedSlider"), speedLabel: $("speedLabel"),
+  timestampsChk: $("timestampsChk"),
+  streamerName: $("streamerName"), scenario: $("scenario"), language: $("language"),
+  chatModeSel: $("chatModeSel"),
+  selectScreenBtn: $("selectScreenBtn"), stopScreenBtn: $("stopScreenBtn"),
+  screenStatus: $("screenStatus"), visionBtn: $("visionBtn"),
+  visionIntervalSlider: $("visionIntervalSlider"), visionIntervalLabel: $("visionIntervalLabel"),
+  togglePreviewBtn: $("togglePreviewBtn"), previewWrap: $("previewWrap"), previewVideo: $("previewVideo"),
+  visionInfo: $("visionInfo"),
+  statusApi: $("statusApi"), statusAi: $("statusAi"), statusVision: $("statusVision"),
+  statusScreen: $("statusScreen"), statusQueue: $("statusQueue"), statusRequests: $("statusRequests"),
+  statusMsg: $("statusMsg"),
+  chatBox: $("chatBox"), chatInput: $("chatInput"), sendBtn: $("sendBtn"),
+  collapseBtn: $("collapseBtn"),
+  hiddenVideo: $("hiddenVideo"), captureCanvas: $("captureCanvas")
+};
+
+/* ============================================================
+   UTILS
+============================================================ */
+function rand(min, max) { return min + Math.random() * (max - min); }
+function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function chance(p) { return Math.random() < p; }
+function nowTs() {
+  const d = new Date();
+  return String(d.getHours()).padStart(2,"0") + ":" + String(d.getMinutes()).padStart(2,"0");
+}
+function setStatusMsg(text, isError = true) {
+  dom.statusMsg.textContent = text || "";
+  dom.statusMsg.style.color = isError ? "#ffb3b3" : "#a8f0c6";
+}
+
+class ApiError extends Error {
+  constructor(message, status) { super(message); this.status = status; }
+}
+
+// Modalità chat (dal dropdown in AI Roleplay)
+function aiModeEnabled() { return dom.chatModeSel.value !== "normal"; }
+function isMixedMode()   { return dom.chatModeSel.value === "mixed"; }
+
+/* ============================================================
+   CHAT ENGINE — viewers / local generation
+============================================================ */
+function generateViewerPool() {
+  const used = new Set();
+  const count = randInt(18, 26);
+  for (let i = 0; i < count; i++) {
+    let name = "";
+    let tries = 0;
+    do {
+      const a = pick(NAME_PARTS_A);
+      const b = pick(NAME_PARTS_B);
+      const glue = chance(0.3) ? "_" : "";
+      const suffix = chance(0.3) ? String(randInt(1, 999)) : "";
+      name = a + glue + b + suffix;
+      tries++;
+    } while (used.has(name.toLowerCase()) && tries < 20);
+    used.add(name.toLowerCase());
+    state.viewers.push({
+      username: name,
+      color: TWITCH_COLORS[i % TWITCH_COLORS.length],
+      personality: pick(PERSONALITIES),
+      activityLevel: rand(0.15, 1.0)  // peso: alcuni scrivono spesso, altri raramente
+    });
+  }
+}
+
+function findOrCreateViewer(username) {
+  const lower = String(username).toLowerCase();
+  let v = state.viewers.find(x => x.username.toLowerCase() === lower);
+  if (!v) {
+    v = {
+      username: String(username).slice(0, 25),
+      color: pick(TWITCH_COLORS),
+      personality: pick(PERSONALITIES),
+      activityLevel: rand(0.2, 0.8)
+    };
+    if (state.viewers.length < 40) state.viewers.push(v);
+  }
+  return v;
+}
+
+function pickActiveViewer() {
+  // selezione pesata per activityLevel
+  const total = state.viewers.reduce((s, v) => s + v.activityLevel, 0);
+  let r = Math.random() * total;
+  for (const v of state.viewers) {
+    r -= v.activityLevel;
+    if (r <= 0) return v;
+  }
+  return state.viewers[0];
+}
+
+function generateLocalMessage() {
+  const viewer = pickActiveViewer();
+  const type = dom.spamType.value;
+  const lang = dom.language.value;
+  let text = "";
+
+  if (type === "laughing") text = pick(LAUGH_POOL);
+  else if (type === "hype") text = pick(HYPE_POOL);
+  else if (type === "emotes") text = pick(UNIVERSAL_EMOTES) + (chance(0.3) ? " " + pick(UNIVERSAL_EMOTES) : "");
+  else if (type === "gg") text = pick(GG_POOL);
+  else if (type === "reactions") text = pick(REACTION_POOL[lang] || REACTION_POOL.en);
+  else {
+    // Random: mix pesato su personalità
+    const roll = Math.random();
+    if (roll < 0.20) text = pick(UNIVERSAL_EMOTES);
+    else if (roll < 0.35) text = pick(LAUGH_POOL);
+    else if (roll < 0.45) text = pick(REACTION_POOL[lang] || REACTION_POOL.en);
+    else {
+      const templates = (PERSONALITY_TEMPLATES[lang] || PERSONALITY_TEMPLATES.en)[viewer.personality]
+        || (PERSONALITY_TEMPLATES.en)[viewer.personality];
+      text = pick(templates);
+    }
+  }
+
+  // conversazioni occasionali tra utenti
+  if (chance(0.08) && state.viewers.length > 1) {
+    let other = pick(state.viewers);
+    let guard = 0;
+    while (other.username === viewer.username && guard++ < 5) other = pick(state.viewers);
+    if (other.username !== viewer.username) text = "@" + other.username + " " + text;
+  }
+
+  return { username: viewer.username, message: text };
+}
+
+/* ============================================================
+   CHAT ENGINE — render
+============================================================ */
+function appendChatMessage(username, message, opts = {}) {
+  const el = document.createElement("div");
+  el.className = "chat-message" + (opts.streamer ? " streamer-msg" : "") + (opts.system ? " system-msg" : "");
+
+  if (dom.timestampsChk.checked && !opts.system) {
+    const ts = document.createElement("span");
+    ts.className = "ts";
+    ts.textContent = nowTs();
+    el.appendChild(ts);
+  }
+
+  if (opts.system) {
+    el.textContent = message;
+  } else {
+    if (opts.streamer) {
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = "STREAMER";
+      el.appendChild(badge);
+    }
+    const uname = document.createElement("span");
+    uname.className = "uname";
+    uname.style.color = opts.color || "#efeff1";
+    uname.textContent = username;
+    const colon = document.createElement("span");
+    colon.className = "colon";
+    colon.textContent = ": ";
+    const msg = document.createElement("span");
+    msg.className = "msg";
+    msg.textContent = message;
+    el.appendChild(uname); el.appendChild(colon); el.appendChild(msg);
+  }
+
+  const nearBottom = dom.chatBox.scrollHeight - dom.chatBox.scrollTop - dom.chatBox.clientHeight < 80;
+  dom.chatBox.appendChild(el);
+
+  // limita i nodi DOM per evitare memory leak su sessioni lunghe
+  while (dom.chatBox.children.length > MAX_CHAT_DOM_MESSAGES) {
+    dom.chatBox.removeChild(dom.chatBox.firstChild);
+  }
+  if (nearBottom) dom.chatBox.scrollTop = dom.chatBox.scrollHeight;
+}
+
+function pushRecentMessage(username, message, isStreamer = false) {
+  state.recentMessages.push({ username, message, isStreamer });
+  if (state.recentMessages.length > 40) state.recentMessages.shift();
+}
+
+function showViewerMessage(username, message) {
+  const viewer = findOrCreateViewer(username);
+  appendChatMessage(viewer.username, message, { color: viewer.color });
+  pushRecentMessage(viewer.username, message, false);
+}
+
+/* ============================================================
+   CHAT ENGINE — main loop
+============================================================ */
+function scheduleNextChatTick() {
+  if (!state.running) return;
+  const baseMs = 60000 / Math.max(1, state.msgsPerMin);
+  // intervallo casuale: la chat non deve essere regolare
+  const delay = baseMs * rand(0.35, 1.7);
+  state.chatTimer = setTimeout(() => {
+    chatTick();
+    scheduleNextChatTick();
+  }, delay);
+}
+
+function chatTick() {
+  if (state.queue.length > 0) {
+    // consuma la queue AI un messaggio alla volta
+    const m = state.queue.shift();
+    showViewerMessage(m.username, m.message);
+    // in modalità mista, ogni tanto un messaggio locale extra insieme al flusso AI
+    if (isMixedMode() && chance(0.2)) {
+      const extra = generateLocalMessage();
+      showViewerMessage(extra.username, extra.message);
+    }
+    updateStatusPanel();
+  } else if (!aiModeEnabled() || isMixedMode()) {
+    // spam locale SOLO in modalità normale o mista
+    const m = generateLocalMessage();
+    showViewerMessage(m.username, m.message);
+  }
+  // Modalità "Solo IA": nessun fallback locale.
+  // Se manca la API key o l'API non risponde, la chat resta semplicemente vuota.
+
+  // richiedi un nuovo batch AI se la queue si sta svuotando
+  if (aiModeEnabled() && state.queue.length <= QUEUE_LOW_THRESHOLD) {
+    maybeRequestAIBatch();
+  }
+}
+
+function startChat() {
+  if (state.running) return;
+  state.running = true;
+  dom.startBtn.textContent = "⏸ Stop Chat";
+  dom.startBtn.classList.add("danger");
+  scheduleNextChatTick();
+  updateStatusPanel();
+}
+
+function stopChat() {
+  state.running = false;
+  if (state.chatTimer) { clearTimeout(state.chatTimer); state.chatTimer = null; }
+  dom.startBtn.textContent = "▶ Start Chat";
+  dom.startBtn.classList.remove("danger");
+  updateStatusPanel();
+}
+
+/* ============================================================
+   OPENROUTER
+============================================================ */
+function getApiKey() { return dom.apiKey.value.trim(); }
+
+function canCallApiNow() {
+  return getApiKey() !== "" && Date.now() >= state.backoffUntil;
+}
+
+async function callOpenRouter(model, messages, opts = {}) {
+  const key = opts.key || getApiKey();
+  const base = opts.baseUrl || providerCfg().baseUrl;
+  if (!key) throw new ApiError("Nessuna API key inserita", 0);
+  if (!model) throw new ApiError("Model ID vuoto", 0);
+  if (!base) throw new ApiError("Base URL vuoto: inseriscilo nel campo Custom", 0);
+
+  state.requestCount++;
+  updateStatusPanel();
+
+  let resp;
+  try {
+    const body = {
+      model: model,
+      messages: messages,
+      max_tokens: opts.maxTokens || 500,
+      temperature: opts.temperature !== undefined ? opts.temperature : 0.95
+    };
+    // parametri extra specifici del provider (es. reasoning_effort per Groq)
+    if (opts.extra) Object.assign(body, opts.extra);
+    resp = await fetch(base + "/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + key,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+  } catch (e) {
+    state.apiConnected = false;
+    throw new ApiError("Network error (connessione assente o bloccata)", -1);
+  }
+
+  if (!resp.ok) {
+    let detail = "";
+    try {
+      const j = await resp.json();
+      // OpenRouter: {error:{message}} — Aion Labs: {detail:"..."}
+      detail = (j && j.error && j.error.message) ? String(j.error.message)
+             : (j && j.detail) ? String(j.detail) : "";
+    } catch (e) { /* body non JSON */ }
+    throw new ApiError(detail || ("HTTP " + resp.status), resp.status);
+  }
+
+  let data;
+  try { data = await resp.json(); }
+  catch (e) { throw new ApiError("Risposta non valida dal server", resp.status); }
+
+  const msgObj = data && data.choices && data.choices[0] && data.choices[0].message
+    ? data.choices[0].message : null;
+  if (!msgObj) throw new ApiError("Risposta vuota dal modello", resp.status);
+  const content = typeof msgObj.content === "string" ? msgObj.content : "";
+  // i modelli reasoning (es. gpt-oss) a volte mettono tutto in 'reasoning' e lasciano content vuoto
+  const reasoning = typeof msgObj.reasoning === "string" ? msgObj.reasoning : "";
+  if (!content && !reasoning) throw new ApiError("Risposta vuota dal modello (aumenta max_tokens?)", resp.status);
+
+  state.apiConnected = true;
+  // azzera il backoff della chat solo per le chiamate chat (non per quelle vision con override)
+  if (!opts.baseUrl) state.backoffAttempt = 0;
+  updateStatusPanel();
+  return { content: content, reasoning: reasoning };
+}
+
+function friendlyApiError(e) {
+  const detail = e.message ? " [" + String(e.message).slice(0, 160) + "]" : "";
+  switch (e.status) {
+    case 401: return "401 — API key non valida o mancante" + detail;
+    case 402: return "402 — Credito insufficiente" + detail;
+    case 403: return "403 — Accesso negato" + detail;
+    case 404:
+      if (/data policy/i.test(e.message || "")) {
+        return "404 — Il tuo account blocca i modelli :free. Abilita 'Free model publication' su openrouter.ai/settings/privacy" + detail;
+      }
+      return "404 — Modello non trovato (controlla Model ID)" + detail;
+    case 429: return "429 — Rate limited (i :free hanno limiti al minuto e giornalieri)" + detail;
+    case -1:  return "Errore di rete";
+    case 0:   return e.message;
+    default:
+      if (e.status >= 500) return e.status + " — Errore del provider, riprovo più tardi" + detail;
+      return (e.status ? e.status + " — " : "") + (e.message || "Errore sconosciuto");
+  }
+}
+
+function handleApiError(e, context) {
+  const msg = friendlyApiError(e);
+  if (e.status === 429 || e.status >= 500) {
+    const step = BACKOFF_STEPS[Math.min(state.backoffAttempt, BACKOFF_STEPS.length - 1)];
+    state.backoffAttempt = Math.min(state.backoffAttempt + 1, BACKOFF_STEPS.length);
+    state.backoffUntil = Date.now() + step;
+    setStatusMsg(context + ": " + msg + " — attendo " + (step / 1000) + "s");
+  } else if (e.status === 401 || e.status === 402 || e.status === 403) {
+    state.apiConnected = false;
+    setStatusMsg(context + ": " + msg);
+  } else {
+    setStatusMsg(context + ": " + msg);
+  }
+  updateStatusPanel();
+}
+
+// Backoff SEPARATO per la Vision: un 429 sugli screenshot non deve fermare la chat AI
+function handleVisionApiError(e) {
+  const msg = friendlyApiError(e);
+  if (e.status === 429 || e.status >= 500) {
+    const step = BACKOFF_STEPS[Math.min(state.visionBackoffAttempt, BACKOFF_STEPS.length - 1)];
+    state.visionBackoffAttempt = Math.min(state.visionBackoffAttempt + 1, BACKOFF_STEPS.length);
+    state.visionBackoffUntil = Date.now() + step;
+    setStatusMsg("Vision: " + msg + " — attendo " + (step / 1000) + "s (la chat AI continua)");
+    if (state.visionBackoffAttempt >= 3) {
+      dom.visionInfo.textContent = "429 frequenti sulla Vision: alza il Vision interval a 20-30s o controlla la quota giornaliera";
+    }
+  } else {
+    setStatusMsg("Vision: " + msg);
+  }
+  updateStatusPanel();
+}
+
+async function loadModels() {
+  const key = getApiKey();
+  const base = providerCfg().baseUrl;
+  if (!base) { setStatusMsg("Base URL vuoto"); return; }
+  dom.loadModelsBtn.disabled = true;
+  dom.loadModelsBtn.textContent = "Loading...";
+  setStatusMsg("");
+  try {
+    let resp;
+    try {
+      resp = await fetch(base + "/models", {
+        headers: key ? { "Authorization": "Bearer " + key } : {}
+      });
+    } catch (e) { throw new ApiError("Network error", -1); }
+    if (!resp.ok) {
+      let detail = "";
+      try {
+        const j = await resp.json();
+        detail = (j && j.error && j.error.message) ? String(j.error.message)
+               : (j && j.detail) ? String(j.detail) : "";
+      } catch (e) { /* non JSON */ }
+      throw new ApiError(detail || ("HTTP " + resp.status), resp.status);
+    }
+    const j = await resp.json();
+    // OpenAI/Groq/Gemini: {data:[{id}]} — Aion: {models:[{id}]}
+    const arr = Array.isArray(j.data) ? j.data : (Array.isArray(j.models) ? j.models : []);
+    const ids = arr.map(m => m && (m.id || m.name)).filter(x => typeof x === "string").sort();
+    if (!ids.length) { setStatusMsg("Nessun modello restituito dall'API"); return; }
+    // popola l'autocomplete dei campi Model ID / Vision Model ID
+    dom.modelsList.innerHTML = "";
+    for (const id of ids) {
+      const opt = document.createElement("option");
+      opt.value = id;
+      dom.modelsList.appendChild(opt);
+    }
+    appendChatMessage(null, "— Modelli disponibili (" + providerCfg().name + "): " +
+      ids.slice(0, 40).join(", ") + (ids.length > 40 ? " …" : "") + " —", { system: true });
+    setStatusMsg(ids.length + " modelli caricati: ora i campi Model ID hanno l'autocomplete ✔", false);
+  } catch (e) {
+    setStatusMsg("Load Models: " + friendlyApiError(e));
+  } finally {
+    dom.loadModelsBtn.disabled = false;
+    dom.loadModelsBtn.textContent = "Load Models";
+  }
+}
+
+async function testApi() {
+  dom.testApiBtn.disabled = true;
+  dom.testApiBtn.textContent = "Testing...";
+  setStatusMsg("");
+  try {
+    await callOpenRouter(dom.modelId.value.trim(), [
+      { role: "user", content: "Reply with the single word: ok" }
+    ], { maxTokens: 60, temperature: 0,
+         extra: dom.providerSel.value === "groq" ? { reasoning_effort: "low" } : undefined });
+    state.apiConnected = true;
+    // per OpenRouter: mostra anche la quota giornaliera dei modelli free
+    let quotaInfo = "";
+    if (dom.providerSel.value === "openrouter") {
+      try {
+        const r = await fetch(providerCfg().baseUrl + "/key", {
+          headers: { "Authorization": "Bearer " + getApiKey() }
+        });
+        if (r.ok) {
+          const j = await r.json();
+          const d = (j && j.data) ? j.data : j;
+          const fq = d && d.free_model_daily_requests;
+          if (fq && typeof fq === "object") {
+            const used = (fq.used !== undefined) ? fq.used : "?";
+            const limit = (fq.limit !== undefined) ? fq.limit : "?";
+            const rem = (fq.remaining !== undefined) ? fq.remaining : "?";
+            quotaInfo = " — Richieste free oggi: " + used + "/" + limit + " (rimaste " + rem + ")";
+          }
+        }
+      } catch (e) { /* info quota non disponibile: ignora */ }
+    }
+    setStatusMsg("Connected ✔" + quotaInfo, false);
+  } catch (e) {
+    state.apiConnected = false;
+    setStatusMsg("Test API: " + friendlyApiError(e));
+  } finally {
+    dom.testApiBtn.disabled = false;
+    dom.testApiBtn.textContent = "Test API";
+    updateStatusPanel();
+  }
+}
+
+/* ============================================================
+   SCREEN CAPTURE
+============================================================ */
+async function selectScreen() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+    setStatusMsg("getDisplayMedia non disponibile in questo browser/contesto (file:// potrebbe bloccarlo — prova Chrome/Edge aggiornati)");
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: 5 },
+      audio: false
+    });
+    state.mediaStream = stream;
+    state.screenActive = true;
+    dom.hiddenVideo.srcObject = stream;
+    dom.previewVideo.srcObject = stream;
+    try { await dom.hiddenVideo.play(); } catch (e) { /* autoplay */ }
+    try { await dom.previewVideo.play(); } catch (e) { /* autoplay */ }
+
+    // se l'utente ferma la condivisione dal banner del browser
+    stream.getVideoTracks().forEach(track => {
+      track.addEventListener("ended", () => stopScreenCapture());
+    });
+
+    dom.stopScreenBtn.disabled = false;
+    dom.togglePreviewBtn.disabled = false;
+    dom.screenStatus.innerHTML = '<span class="dot green"></span>Screen capture active';
+    appendChatMessage(null, "— Screen capture attiva —", { system: true });
+    setStatusMsg("");
+  } catch (e) {
+    if (e && (e.name === "NotAllowedError" || e.name === "AbortError")) {
+      setStatusMsg("Cattura schermo annullata dall'utente");
+    } else {
+      setStatusMsg("Screen capture: " + (e && e.message ? e.message : "errore"));
+    }
+  }
+  updateStatusPanel();
+}
+
+function stopScreenCapture() {
+  if (state.mediaStream) {
+    state.mediaStream.getTracks().forEach(track => track.stop());
+    state.mediaStream = null;
+  }
+  state.screenActive = false;
+  state.lastFrameDataUrl = null;    // cancella ultimo screenshot in memoria
+  dom.hiddenVideo.srcObject = null;
+  dom.previewVideo.srcObject = null;
+  dom.stopScreenBtn.disabled = true;
+  dom.togglePreviewBtn.disabled = true;
+  dom.previewWrap.classList.remove("visible");
+  dom.togglePreviewBtn.textContent = "Show preview";
+  dom.screenStatus.innerHTML = '<span class="dot gray"></span>Screen capture inactive';
+  updateStatusPanel();
+}
+
+function captureFrame() {
+  // Chiamata SOLO dal vision loop (mai con Vision OFF)
+  if (!state.screenActive || !state.mediaStream) return null;
+  const video = dom.hiddenVideo;
+  if (!video.videoWidth || !video.videoHeight) return null;
+  const canvas = dom.captureCanvas;
+  const scale = Math.min(1, FRAME_MAX_WIDTH / video.videoWidth);
+  canvas.width = Math.round(video.videoWidth * scale);
+  canvas.height = Math.round(video.videoHeight * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  try {
+    return canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+  } catch (e) {
+    return null;
+  }
+}
+
+/* ============================================================
+   VISION (FASE A — screen understanding)
+============================================================ */
+function startVisionLoop() {
+  stopVisionLoop();
+  state.visionTimer = setInterval(visionTick, state.visionIntervalSec * 1000);
+}
+
+function stopVisionLoop() {
+  if (state.visionTimer) { clearInterval(state.visionTimer); state.visionTimer = null; }
+}
+
+// La Vision usa SEMPRE OpenRouter, con la key dedicata nella sezione Stream Vision
+function getVisionKey() {
+  const k = dom.visionApiKey.value.trim();
+  if (k) return k;
+  // fallback: se la chat è già su OpenRouter, riusa quella key
+  return dom.providerSel.value === "openrouter" ? getApiKey() : "";
+}
+
+async function visionTick() {
+  if (!state.visionEnabled || !state.visionSupported) return;
+  if (!state.screenActive || state.visionBusy) return;
+  if (Date.now() < state.visionBackoffUntil) return;
+
+  const vKey = getVisionKey();
+  if (!vKey) {
+    dom.visionInfo.textContent = "Inserisci la OpenRouter API Key qui sopra per usare la Vision";
+    return;
+  }
+
+  const frame = captureFrame();
+  if (!frame) return;
+  state.lastFrameDataUrl = frame;
+  state.visionBusy = true;
+
+  const visionModel = dom.visionModelId.value.trim() || "qwen/qwen3.8-27b:free";
+  const sys = "You analyze a single screenshot from a livestream. Reply ONLY with compact JSON: " +
+    '{"scene":"...","event":"...","intensity":"low|medium|high","details":"...","confidence":0.0}. ' +
+    "scene = what is on screen. event = the most notable thing happening (or 'nothing notable'). Keep it short.";
+
+  try {
+    const resp = await callOpenRouter(visionModel, [
+      { role: "system", content: sys },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Analyze this stream screenshot. Scenario hint: " + dom.scenario.value.trim() },
+          { type: "image_url", image_url: { url: frame } }
+        ]
+      }
+    ], { maxTokens: 400, temperature: 0.3, baseUrl: PROVIDERS.openrouter.baseUrl, key: vKey });
+
+    const parsed = extractFirstJsonObject(resp.content) || extractFirstJsonObject(resp.reasoning);
+    if (parsed && (parsed.scene || parsed.event)) {
+      state.currentScreenState = parsed;
+      if (parsed.event && !/nothing notable/i.test(String(parsed.event))) {
+        addEvent(String(parsed.event).slice(0, 120));
+      }
+      // info vision nel suo pannello: NON sovrascrive gli errori in Status
+      dom.visionInfo.textContent = "👁 " + String(parsed.event || parsed.scene).slice(0, 70);
+    }
+    // successo: azzera il backoff della vision
+    state.visionBackoffAttempt = 0;
+    state.visionBackoffUntil = 0;
+  } catch (e) {
+    if (isVisionUnsupportedError(e)) {
+      state.visionSupported = false;
+      state.visionEnabled = false;
+      stopVisionLoop();
+      state.lastFrameDataUrl = null;
+      dom.visionInfo.textContent = "Vision: il modello '" + visionModel + "' non accetta immagini — Text Mode";
+      appendChatMessage(null, "— Il modello '" + visionModel + "' non accetta immagini. Prova nel campo Vision Model ID: qwen/qwen3.8-27b:free oppure google/gemma-4-31b-it:free, poi riattiva Vision —", { system: true });
+    } else {
+      handleVisionApiError(e);
+    }
+  } finally {
+    state.visionBusy = false;
+    updateVisionButtons();
+    updateStatusPanel();
+  }
+}
+
+function isVisionUnsupportedError(e) {
+  // NON considerare il 404 come "no vision": spesso è model ID errato
+  // o data policy dell'account che blocca i modelli :free.
+  const txt = (e.message || "").toLowerCase();
+  if (/does not support|image input|no image|multimodal|modality|vision not/i.test(txt)) return true;
+  // Groq (e altri provider solo testo) rifiutano l'array multimodale così:
+  if (/content must be a string|must be a string/i.test(txt)) return true;
+  if ((e.status === 400 || e.status === 415 || e.status === 422) &&
+      /image|vision|content type|input type/i.test(txt)) return true;
+  return false;
+}
+
+/* ============================================================
+   AI GENERATION (FASE B — chat generation)
+============================================================ */
+function addEvent(text) {
+  state.lastEvents.push(text);
+  while (state.lastEvents.length > MAX_EVENTS) state.lastEvents.shift();
+}
+
+function buildSystemPrompt() {
+  const langNames = { it: "Italian", en: "English" };
+  return (
+"You simulate a Twitch livestream chat.\n" +
+"Messages must feel spontaneous and human.\n" +
+"Each virtual viewer has a persistent personality.\n" +
+"React primarily to the latest stream event and recent conversation.\n" +
+"Do not make every user react to every event.\n" +
+"Some viewers should ignore what happened. Some should joke. Some should disagree. " +
+"Some should use real emojis (🐸 💀 😂 🔥 😭 👏 🤡 👀), never text emotes like KEKW or PogChamp. " +
+"Some should send very short reactions.\n" +
+"IMPORTANT: viewers must also interact with the streamer directly. " +
+"When the streamer says something in chat, some viewers should answer them, ask them questions, " +
+"greet them or tease them by name. Treat streamer messages as the most important thing to react to.\n" +
+"Avoid repetitive phrases. Avoid overly articulate AI-style writing. " +
+"Avoid everyone using punctuation perfectly. Avoid excessive emojis (max one per message, many messages with none). " +
+"Avoid explaining the scene.\n" +
+"Messages should usually be between 1 and 15 words.\n" +
+"Language: " + (langNames[dom.language.value] || "English") + "\n" +
+"Streamer: " + dom.streamerName.value.trim() + "\n" +
+"Scenario: " + dom.scenario.value.trim() + "\n\n" +
+'Reply ONLY with JSON in this exact format, nothing else:\n' +
+'{"messages":[{"username":"name","message":"text"}]}'
+  );
+}
+
+function buildUserPrompt() {
+  const parts = [];
+
+  // sottoinsieme di utenti virtuali (risparmio token)
+  const sample = [...state.viewers].sort(() => Math.random() - 0.5).slice(0, 12);
+  parts.push("Virtual viewers (use ONLY these usernames):");
+  for (const v of sample) {
+    parts.push("- " + v.username + " (" + v.personality + ", activity " + (v.activityLevel > 0.6 ? "high" : v.activityLevel > 0.35 ? "medium" : "low") + ")");
+  }
+
+  if (state.lastEvents.length) {
+    parts.push("\nRecent stream events (oldest to newest):");
+    state.lastEvents.forEach(e => parts.push("- " + e));
+  }
+
+  if (state.currentScreenState) {
+    parts.push("\nCurrent screen state: " + JSON.stringify(state.currentScreenState));
+  }
+
+  const recent = state.recentMessages.slice(-MAX_RECENT_FOR_AI);
+  if (recent.length) {
+    parts.push("\nRecent chat messages:");
+    recent.forEach(m => parts.push((m.isStreamer ? "[STREAMER] " : "") + m.username + ": " + m.message));
+  }
+
+  if (state.streamerRecentMessages.length) {
+    parts.push("\nLatest things the streamer (" + (dom.streamerName.value.trim() || "Streamer") + ") said in chat:");
+    state.streamerRecentMessages.slice(-3).forEach(m => parts.push("- " + m));
+    parts.push("Make at least 1-2 viewers reply directly to the streamer's latest message.");
+  }
+
+  parts.push("\nGenerate " + randInt(3, 6) + " new chat messages now. Output compact single-line JSON only, no other text.");
+  return parts.join("\n");
+}
+
+function maybeRequestAIBatch() {
+  if (state.aiBusy) return;
+  if (!canCallApiNow()) return;
+  if (Date.now() - state.lastAiRequestAt < MIN_AI_REQUEST_GAP) return;
+  requestAIBatch();
+}
+
+async function requestAIBatch() {
+  state.aiBusy = true;
+  state.lastAiRequestAt = Date.now();
+  try {
+    // reasoning al minimo su Groq (i gpt-oss altrimenti bruciano il budget in "pensieri")
+    const extra = dom.providerSel.value === "groq" ? { reasoning_effort: "low" } : undefined;
+    const resp = await callOpenRouter(dom.modelId.value.trim(), [
+      { role: "system", content: buildSystemPrompt() },
+      { role: "user", content: buildUserPrompt() }
+    ], { maxTokens: 1400, temperature: 1.0, extra: extra });
+
+    // cerca il JSON prima nel content, poi (fallback) nel reasoning
+    let msgs = parseAIResponse(resp.content);
+    if (msgs.length === 0 && resp.reasoning) msgs = parseAIResponse(resp.reasoning);
+    for (const m of msgs) state.queue.push(m);
+    if (msgs.length === 0) {
+      const snippet = (resp.content || resp.reasoning || "").slice(0, 100).replace(/\s+/g, " ");
+      setStatusMsg("AI: risposta senza JSON valido (inizio: \"" + snippet + "…\")");
+    }
+    else setStatusMsg("", false);
+  } catch (e) {
+    handleApiError(e, "AI");
+  } finally {
+    state.aiBusy = false;
+    updateStatusPanel();
+  }
+}
+
+/* ============================================================
+   QUEUE / PARSING
+============================================================ */
+function extractFirstJsonObject(text) {
+  if (typeof text !== "string") return null;
+  let t = text.trim();
+  // rimuovi code fence ```json ... ```
+  t = t.replace(/```json/gi, "```").replace(/```/g, "").trim();
+  // tentativo diretto
+  try { return JSON.parse(t); } catch (e) { /* continua */ }
+  // cerca il primo oggetto JSON bilanciato
+  const start = t.indexOf("{");
+  if (start === -1) return null;
+  let depth = 0, inStr = false, esc = false;
+  for (let i = start; i < t.length; i++) {
+    const c = t[i];
+    if (esc) { esc = false; continue; }
+    if (c === "\\") { if (inStr) esc = true; continue; }
+    if (c === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (c === "{") depth++;
+    else if (c === "}") {
+      depth--;
+      if (depth === 0) {
+        try { return JSON.parse(t.slice(start, i + 1)); } catch (e) { return null; }
+      }
+    }
+  }
+  return null;
+}
+
+function parseAIResponse(content) {
+  const out = [];
+  const obj = extractFirstJsonObject(content);
+  if (obj && Array.isArray(obj.messages)) {
+    for (const item of obj.messages) {
+      if (!item || typeof item !== "object") continue;
+      const u = item.username, m = item.message;
+      if (typeof u !== "string" || typeof m !== "string") continue;
+      const uu = u.trim().slice(0, 25);
+      const mm = m.trim().slice(0, 200);
+      if (!uu || !mm) continue;
+      out.push({ username: uu, message: mm });
+      if (out.length >= 10) break;
+    }
+  }
+  // SALVAGE: JSON troncato (max_tokens raggiunto) o malformato a metà →
+  // recupera comunque tutte le coppie username/message complete via regex
+  if (out.length === 0 && typeof content === "string") {
+    const re = /"username"\s*:\s*"((?:[^"\\]|\\.)*)"\s*,\s*"message"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+    let m;
+    while ((m = re.exec(content)) !== null && out.length < 10) {
+      try {
+        const uu = JSON.parse('"' + m[1] + '"').trim().slice(0, 25);
+        const mm = JSON.parse('"' + m[2] + '"').trim().slice(0, 200);
+        if (uu && mm) out.push({ username: uu, message: mm });
+      } catch (e) { /* coppia malformata: salta */ }
+    }
+  }
+  return out;
+}
+
+/* ============================================================
+   ERROR HANDLING / STATUS UI
+============================================================ */
+function updateStatusPanel() {
+  dom.statusApi.textContent = state.apiConnected ? "Connected" : "Offline";
+  dom.statusApi.style.color = state.apiConnected ? "#7be89b" : "#adadb8";
+  dom.statusAi.textContent = aiModeEnabled() ? "ON" : "OFF";
+  dom.statusVision.textContent = !state.visionSupported ? "Unsupported" : (state.visionEnabled ? "ON" : "OFF");
+  dom.statusScreen.textContent = state.screenActive ? "Active" : "Inactive";
+  dom.statusQueue.textContent = String(state.queue.length);
+  dom.statusRequests.textContent = String(state.requestCount);
+}
+
+function updateVisionButtons() {
+  if (!state.visionSupported) {
+    dom.visionBtn.textContent = "Vision: unavailable for this model";
+    dom.visionBtn.className = "btn off";
+  } else {
+    dom.visionBtn.textContent = "Vision: " + (state.visionEnabled ? "ON" : "OFF");
+    dom.visionBtn.className = "btn " + (state.visionEnabled ? "on" : "off");
+  }
+}
+
+/* ============================================================
+   EVENTS
+============================================================ */
+function sendStreamerMessage() {
+  const text = dom.chatInput.value.trim();
+  if (!text) return;
+  dom.chatInput.value = "";
+  const name = dom.streamerName.value.trim() || "Streamer";
+  appendChatMessage(name, text, { streamer: true, color: "#9147ff" });
+  pushRecentMessage(name, text, true);
+  state.streamerRecentMessages.push(text);
+  while (state.streamerRecentMessages.length > 5) state.streamerRecentMessages.shift();
+  addEvent('Streamer said in chat: "' + text.slice(0, 80) + '"');
+  // sollecita subito un batch AI (bypassa il gap minimo) così la chat risponde allo streamer
+  if (state.running && aiModeEnabled() && !state.aiBusy && canCallApiNow()) {
+    requestAIBatch();
+  }
+}
+
+function wireEvents() {
+  // API key show/hide
+  dom.toggleKeyBtn.addEventListener("click", () => {
+    const isPwd = dom.apiKey.type === "password";
+    dom.apiKey.type = isPwd ? "text" : "password";
+    dom.toggleKeyBtn.textContent = isPwd ? "🙈" : "👁";
+  });
+
+  // Salvataggio PERMANENTE della key (localStorage, una key per provider)
+  dom.saveKeyChk.addEventListener("change", () => {
+    if (dom.saveKeyChk.checked) {
+      storeSet(storageKeyName(), dom.apiKey.value);
+      setStatusMsg("Key salvata su questo browser ✔", false);
+    } else {
+      storeRemove(storageKeyName());
+      setStatusMsg("Key rimossa dal browser", false);
+    }
+  });
+  dom.apiKey.addEventListener("input", () => {
+    if (dom.saveKeyChk.checked) storeSet(storageKeyName(), dom.apiKey.value);
+  });
+
+  // Cambio provider (ricordato permanentemente)
+  dom.providerSel.addEventListener("change", () => {
+    storeSet("last_provider", dom.providerSel.value);
+    applyProvider();
+  });
+
+  dom.testApiBtn.addEventListener("click", testApi);
+  dom.loadModelsBtn.addEventListener("click", loadModels);
+
+  // Controls
+  dom.clearBtn.addEventListener("click", () => {
+    dom.chatBox.innerHTML = "";
+    state.queue.length = 0;
+    updateStatusPanel();
+  });
+
+  dom.startBtn.addEventListener("click", () => {
+    if (state.running) stopChat(); else startChat();
+  });
+
+  dom.chatModeSel.addEventListener("change", () => {
+    if (dom.chatModeSel.value === "normal") {
+      state.queue.length = 0; // svuota i messaggi AI in coda
+    } else {
+      if (!getApiKey()) {
+        appendChatMessage(null, dom.chatModeSel.value === "ai"
+          ? "— Modalità Solo IA: senza una API key valida la chat resterà vuota —"
+          : "— Modalità Mista: senza API key vedrai solo lo spam locale —", { system: true });
+      }
+      if (state.running) maybeRequestAIBatch();
+    }
+    updateStatusPanel();
+  });
+
+  // Speed
+  dom.speedSlider.addEventListener("input", () => {
+    state.msgsPerMin = parseInt(dom.speedSlider.value, 10);
+    dom.speedLabel.textContent = "~ " + state.msgsPerMin + " messages/min";
+  });
+
+  // Vision
+  dom.visionBtn.addEventListener("click", () => {
+    if (!state.visionSupported) {
+      // permetti di riprovare se l'utente ha cambiato Vision Model ID
+      state.visionSupported = true;
+    }
+    state.visionEnabled = !state.visionEnabled;
+    if (state.visionEnabled) {
+      startVisionLoop();
+      if (!state.screenActive) setStatusMsg("Vision ON: seleziona uno schermo/finestra per iniziare l'analisi", false);
+    } else {
+      stopVisionLoop();
+      state.lastFrameDataUrl = null;
+    }
+    updateVisionButtons();
+    updateStatusPanel();
+  });
+
+  // Vision key: mostra/nascondi + salvataggio permanente
+  dom.toggleVisionKeyBtn.addEventListener("click", () => {
+    const isPwd = dom.visionApiKey.type === "password";
+    dom.visionApiKey.type = isPwd ? "text" : "password";
+    dom.toggleVisionKeyBtn.textContent = isPwd ? "🙈" : "👁";
+  });
+  dom.visionApiKey.addEventListener("input", () => {
+    storeSet("vision_api_key", dom.visionApiKey.value);
+  });
+
+  dom.visionIntervalSlider.addEventListener("input", () => {
+    state.visionIntervalSec = parseInt(dom.visionIntervalSlider.value, 10);
+    dom.visionIntervalLabel.textContent = state.visionIntervalSec + " s";
+    if (state.visionEnabled) startVisionLoop(); // riavvia con nuovo intervallo
+  });
+
+  dom.selectScreenBtn.addEventListener("click", selectScreen);
+  dom.stopScreenBtn.addEventListener("click", stopScreenCapture);
+
+  dom.togglePreviewBtn.addEventListener("click", () => {
+    const visible = dom.previewWrap.classList.toggle("visible");
+    dom.togglePreviewBtn.textContent = visible ? "Hide preview" : "Show preview";
+  });
+
+  // Manual chat input
+  dom.sendBtn.addEventListener("click", sendStreamerMessage);
+  dom.chatInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); sendStreamerMessage(); }
+  });
+
+  // Sidebar collapse
+  dom.collapseBtn.addEventListener("click", () => {
+    document.body.classList.toggle("sidebar-collapsed");
+  });
+
+  // Cleanup su chiusura pagina
+  window.addEventListener("beforeunload", () => {
+    stopChat();
+    stopVisionLoop();
+    if (state.mediaStream) state.mediaStream.getTracks().forEach(t => t.stop());
+  });
+}
+
+/* ============================================================
+   INIT
+============================================================ */
+function applyProvider() {
+  const isCustom = dom.providerSel.value === "custom";
+  dom.customBaseUrl.style.display = isCustom ? "" : "none";
+  const cfg = providerCfg();
+  if (!isCustom) {
+    dom.modelId.value = cfg.defaultModel;
+  }
+  dom.providerNote.textContent = (cfg.baseUrl ? cfg.baseUrl + " — " : "") + cfg.note;
+  dom.modelsList.innerHTML = ""; // svuota l'autocomplete del provider precedente
+
+  // ripristina l'eventuale key salvata permanentemente per QUESTO provider
+  const saved = storeGet(storageKeyName());
+  dom.apiKey.value = saved;
+  dom.saveKeyChk.checked = !!saved;
+
+  // reset stato API
+  state.apiConnected = false;
+  state.backoffAttempt = 0;
+  state.backoffUntil = 0;
+  setStatusMsg("");
+
+  // la Vision è indipendente dal provider chat (usa sempre OpenRouter con la sua key)
+  state.visionSupported = true;
+  updateVisionButtons();
+  updateStatusPanel();
+}
+
+function init() {
+  generateViewerPool();
+  wireEvents();
+
+  // ripristina l'ultimo provider usato
+  const lastProv = storeGet("last_provider");
+  if (lastProv && (PROVIDERS[lastProv] || lastProv === "custom")) dom.providerSel.value = lastProv;
+
+  applyProvider();   // imposta base URL, modello di default e ripristina la key salvata
+
+  // ripristina la key Vision (dedicata, o riusa quella OpenRouter salvata)
+  dom.visionApiKey.value = storeGet("vision_api_key") || storeGet("api_key_openrouter");
+
+  // auto-collapse su finestre piccole
+  if (window.innerWidth < 820) document.body.classList.add("sidebar-collapsed");
+
+  appendChatMessage(null, "Benvenuto! La chat parte in automatico. Inserisci la tua OpenRouter API key " +
+    "per attivare i messaggi generati dall'IA (modalità Solo IA o Mista).", { system: true });
+  appendChatMessage(null, "Suggerimento: attiva Stream Vision per far reagire la chat a quello che succede sullo schermo.", { system: true });
+
+  updateStatusPanel();
+  updateVisionButtons();
+
+  // la chat parte in automatico
+  startChat();
+}
+
+init();
+</script>
+</body>
+</html>
